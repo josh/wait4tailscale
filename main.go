@@ -25,6 +25,7 @@ var (
 	socket        string
 	help          bool
 	verbose       bool
+	version       bool
 	online        bool
 	offline       bool
 	watch         bool
@@ -36,6 +37,7 @@ func main() {
 	flag.StringVar(&socket, "socket", "", "Path to Tailscale socket")
 	flag.BoolVar(&help, "help", false, "Show help information")
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose debug logging")
+	flag.BoolVar(&version, "version", false, "Show version information")
 	flag.BoolVar(&online, "online", false, "Wait for Tailscale to be online")
 	flag.BoolVar(&offline, "offline", false, "Wait for Tailscale to be offline")
 	flag.BoolVar(&watch, "watch", false, "Watch for Tailscale state changes")
@@ -47,6 +49,11 @@ func main() {
 
 	if help {
 		showUsage()
+		return
+	}
+
+	if version {
+		fmt.Printf("wait4tailscale %s\n", Version)
 		return
 	}
 
@@ -163,7 +170,7 @@ func setupLogging(verbose bool) {
 }
 
 func showUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd-target=NAME [--socket=PATH] [--verbose] [--interval=DURATION]\n")
+	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd-target=NAME [--socket=PATH] [--verbose] [--version] [--interval=DURATION]\n")
 }
 
 func watchStateChanges(ctx context.Context, client *local.Client, stateChan chan<- bool) {

@@ -16,7 +16,7 @@ import (
 	"tailscale.com/ipn/ipnstate"
 )
 
-const (
+var (
 	Version        = "0.0.0"
 	SystemdProgram = "systemctl"
 )

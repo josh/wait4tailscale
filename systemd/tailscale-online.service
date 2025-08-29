@@ -1,0 +1,8 @@
+[Unit]
+Description=Monitor Tailscale online status
+Documentation=https://github.com/josh/wait4tailscale
+After=tailscale.service
+Wants=tailscale.service
+
+[Service]
+ExecStart=/usr/bin/wait4tailscale --systemd-target tailscale-online.target

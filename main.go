@@ -163,7 +163,7 @@ func setupLogging(verbose bool) {
 }
 
 func showUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd [--target=NAME] [--socket=PATH] [--verbose] [--interval=DURATION]\n")
+	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd-target=NAME [--socket=PATH] [--verbose] [--interval=DURATION]\n")
 }
 
 func watchStateChanges(ctx context.Context, client *local.Client, stateChan chan<- bool) {

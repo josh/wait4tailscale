@@ -6,3 +6,6 @@ Wants=tailscale.service
 
 [Service]
 ExecStart=/usr/bin/wait4tailscale -systemd-target=tailscale-online.target
+
+[Install]
+WantedBy=multi-user.target

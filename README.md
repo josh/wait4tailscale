@@ -37,3 +37,12 @@ Another feature is syncing a systemd target to the current online state. This fu
 ```
 $ wait4tailscale -systemd-target=tailscale-online.target
 ```
+
+### Nix
+
+Packaged under [josh/nurpkgs](https://github.com/josh/nurpkgs) flake. Use the systemd units in your NixOS config with something like this:
+
+```nix
+systemd.packages = [ pkgs.nur.repos.josh.wait4tailscale ];
+systemd.services.tailscale-online.wantedBy = [ "multi-user.target" ];
+```

@@ -21,9 +21,9 @@ Or watch a log of all changes
 
 ```
 $ wait4tailscale -watch
-2025-08-29 12:00:00 online
-2025-08-29 12:10:00 offline
-2025-08-29 12:20:00 online
+online
+offline
+online
 ```
 
 Will automatically detect the default socket location, but otherwise a socket can be explicitly given.

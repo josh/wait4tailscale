@@ -1,8 +1,8 @@
 module github.com/josh/wait4tailscale
 
-go 1.24.5
+go 1.25.1
 
-require tailscale.com v1.86.5
+require tailscale.com v1.88.3
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -11,7 +11,7 @@ require (
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-json-experiment/json v0.0.0-20250223041408-d3c622f1b874 // indirect
+	github.com/go-json-experiment/json v0.0.0-20250813024750-ebf49471dced // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/jsimonetti/rtnetlink v1.4.0 // indirect

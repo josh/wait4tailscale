@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -30,6 +31,7 @@ var (
 	offline       bool
 	watch         bool
 	systemdTarget string
+	envFile       string
 	interval      time.Duration
 )
 
@@ -42,6 +44,7 @@ func main() {
 	flag.BoolVar(&offline, "offline", false, "Wait for Tailscale to be offline")
 	flag.BoolVar(&watch, "watch", false, "Watch for Tailscale state changes")
 	flag.StringVar(&systemdTarget, "systemd-target", "", "Sync systemd target to Tailscale state")
+	flag.StringVar(&envFile, "env-file", "", "Path to write environment file with Tailscale IPs")
 	flag.DurationVar(&interval, "interval", 2*time.Second, "Interval between status checks (e.g., 2s, 500ms)")
 	flag.Parse()
 
@@ -145,9 +148,17 @@ func main() {
 				return
 			case isOnline := <-stateChan:
 				if isOnline {
+					if envFile != "" {
+						if err := writeEnvFile(ctx, client, envFile); err != nil {
+							slog.Error("Failed to write env file", "path", envFile, "error", err)
+						}
+					}
 					_ = execCommand(ctx, SystemdProgram, "start", systemdTarget)
 				} else {
 					_ = execCommand(ctx, SystemdProgram, "stop", systemdTarget)
+					if envFile != "" {
+						deleteEnvFile(envFile)
+					}
 				}
 			}
 		}
@@ -170,7 +181,7 @@ func setupLogging(verbose bool) {
 }
 
 func showUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd-target=NAME [--socket=PATH] [--verbose] [--version] [--interval=DURATION]\n")
+	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd-target=NAME [--socket=PATH] [--env-file=PATH] [--verbose] [--version] [--interval=DURATION]\n")
 }
 
 func watchStateChanges(ctx context.Context, client *local.Client, stateChan chan<- bool) {
@@ -292,6 +303,59 @@ func getClientStatus(ctx context.Context, client *local.Client) (*ipnstate.Statu
 		"ok", err == nil,
 		"error", err)
 	return status, err
+}
+
+func writeEnvFile(ctx context.Context, client *local.Client, path string) error {
+	status, err := getClientStatus(ctx, client)
+	if err != nil {
+		return fmt.Errorf("failed to get status: %w", err)
+	}
+
+	if status.Self == nil {
+		return fmt.Errorf("no self info available")
+	}
+
+	var ipv4, ipv6 string
+	for _, ip := range status.TailscaleIPs {
+		if ip.Is4() && ipv4 == "" {
+			ipv4 = ip.String()
+		} else if ip.Is6() && ipv6 == "" {
+			ipv6 = ip.String()
+		}
+	}
+
+	var content string
+	if ipv4 != "" {
+		content += fmt.Sprintf("TS_IPV4=%s\n", ipv4)
+	}
+	if ipv6 != "" {
+		content += fmt.Sprintf("TS_IPV6=%s\n", ipv6)
+	}
+
+	if content == "" {
+		slog.Debug("No IP addresses to write to env file")
+		return nil
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	slog.Debug("Wrote env file", "path", path, "ipv4", ipv4, "ipv6", ipv6)
+	return nil
+}
+
+func deleteEnvFile(path string) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		slog.Error("Failed to delete env file", "path", path, "error", err)
+	} else if err == nil {
+		slog.Debug("Deleted env file", "path", path)
+	}
 }
 
 func execCommand(ctx context.Context, cmd string, args ...string) error {

@@ -5,7 +5,7 @@ After=tailscale.service
 Wants=tailscale.service
 
 [Service]
-ExecStart=/usr/bin/wait4tailscale -systemd-target=tailscale-online.target
+ExecStart=/usr/bin/wait4tailscale -systemd-target=tailscale-online.target -env-file=%t/tailscale/ip.env
 
 [Install]
 WantedBy=multi-user.target

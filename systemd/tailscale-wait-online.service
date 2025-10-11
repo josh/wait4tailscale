@@ -1,8 +1,8 @@
 [Unit]
 Description=Wait for Tailscale to be Online
 Documentation=https://github.com/josh/wait4tailscale
-Wants=tailscale.service
-After=tailscale.service
+Wants=tailscaled.service
+After=tailscaled.service
 
 [Service]
 Type=oneshot

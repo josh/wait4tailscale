@@ -1,4 +1,4 @@
 [Unit]
 Description=Tailscale is Online
-After=tailscale-wait-online.service
 Wants=tailscale-wait-online.service
+After=tailscale-wait-online.service

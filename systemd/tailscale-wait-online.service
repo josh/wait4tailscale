@@ -3,6 +3,7 @@ Description=Wait for Tailscale to be Online
 Documentation=https://github.com/josh/wait4tailscale
 Wants=tailscaled.service
 After=tailscaled.service
+Before=tailscale-online.target
 
 [Service]
 Type=oneshot

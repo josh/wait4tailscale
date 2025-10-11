@@ -7,5 +7,5 @@ After=tailscale.service
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=/usr/bin/wait4tailscale -online -env-file=%t/tailscale/ip.env
+ExecStart=/usr/bin/wait4tailscale -online -env-file=%t/tailscale/status.env
 ExecStop=/usr/bin/rm -f %t/tailscale/ip.env

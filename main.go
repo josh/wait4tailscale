@@ -14,13 +14,18 @@ import (
 
 	"tailscale.com/client/local"
 	"tailscale.com/ipn"
-	"tailscale.com/ipn/ipnstate"
 )
 
 var (
 	Version        = "1.1.0"
 	SystemdProgram = "systemctl"
 )
+
+type tailscaleState struct {
+	online bool
+	ipv4   string
+	ipv6   string
+}
 
 var (
 	socket        string
@@ -103,7 +108,7 @@ func main() {
 		slog.Debug("Using custom socket path", "socket", socket)
 	}
 
-	stateChan := make(chan bool, 1)
+	stateChan := make(chan tailscaleState, 1)
 	go watchStateChanges(ctx, client, stateChan)
 
 	if online {
@@ -111,8 +116,9 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case isOnline := <-stateChan:
-				if isOnline {
+			case state := <-stateChan:
+				syncEnvFile(envFile, state)
+				if state.online {
 					return
 				}
 			}
@@ -122,8 +128,9 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case isOnline := <-stateChan:
-				if !isOnline {
+			case state := <-stateChan:
+				syncEnvFile(envFile, state)
+				if !state.online {
 					return
 				}
 			}
@@ -133,8 +140,9 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case isOnline := <-stateChan:
-				if isOnline {
+			case state := <-stateChan:
+				syncEnvFile(envFile, state)
+				if state.online {
 					fmt.Println("online")
 				} else {
 					fmt.Println("offline")
@@ -146,19 +154,12 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case isOnline := <-stateChan:
-				if isOnline {
-					if envFile != "" {
-						if err := writeEnvFile(ctx, client, envFile); err != nil {
-							slog.Error("Failed to write env file", "path", envFile, "error", err)
-						}
-					}
+			case state := <-stateChan:
+				syncEnvFile(envFile, state)
+				if state.online {
 					_ = execCommand(ctx, SystemdProgram, "start", systemdTarget)
 				} else {
 					_ = execCommand(ctx, SystemdProgram, "stop", systemdTarget)
-					if envFile != "" {
-						deleteEnvFile(envFile)
-					}
 				}
 			}
 		}
@@ -184,15 +185,15 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd-target=NAME [--socket=PATH] [--env-file=PATH] [--verbose] [--version] [--interval=DURATION]\n")
 }
 
-func watchStateChanges(ctx context.Context, client *local.Client, stateChan chan<- bool) {
+func watchStateChanges(ctx context.Context, client *local.Client, stateChan chan<- tailscaleState) {
 	notifyChan := make(chan ipn.Notify, 10)
 
 	go clientWatchIPNBus(ctx, client, notifyChan)
 
 	// Get initial state
-	previousState := false
-	if status, err := getClientStatus(ctx, client); err == nil && status.Self != nil {
-		previousState = status.Self.Online
+	previousState, err := getClientStatus(ctx, client)
+	if err != nil {
+		slog.Debug("Failed to get initial status", "error", err)
 	}
 
 	// Broadcast initial state
@@ -213,9 +214,9 @@ func watchStateChanges(ctx context.Context, client *local.Client, stateChan chan
 
 			slog.Debug("Received IPN notification", "Health", notify.Health)
 
-			currentState := false
-			if status, err := getClientStatus(ctx, client); err == nil && status.Self != nil {
-				currentState = status.Self.Online
+			currentState, err := getClientStatus(ctx, client)
+			if err != nil {
+				slog.Debug("Failed to get status", "error", err)
 			}
 
 			slog.Debug("poll state", "current", currentState, "previous", previousState)
@@ -294,7 +295,9 @@ func nextWatcherEvent(watcher *local.IPNBusWatcher) (ipn.Notify, error) {
 	return notify, err
 }
 
-func getClientStatus(ctx context.Context, client *local.Client) (*ipnstate.Status, error) {
+func getClientStatus(ctx context.Context, client *local.Client) (tailscaleState, error) {
+	state := tailscaleState{}
+
 	start := time.Now()
 	status, err := client.StatusWithoutPeers(ctx)
 	duration := time.Since(start)
@@ -302,59 +305,60 @@ func getClientStatus(ctx context.Context, client *local.Client) (*ipnstate.Statu
 		"duration", duration,
 		"ok", err == nil,
 		"error", err)
-	return status, err
-}
 
-func writeEnvFile(ctx context.Context, client *local.Client, path string) error {
-	status, err := getClientStatus(ctx, client)
 	if err != nil {
-		return fmt.Errorf("failed to get status: %w", err)
+		return state, err
 	}
 
 	if status.Self == nil {
-		return fmt.Errorf("no self info available")
+		return state, nil
 	}
 
-	var ipv4, ipv6 string
+	state.online = status.Self.Online
+
 	for _, ip := range status.TailscaleIPs {
-		if ip.Is4() && ipv4 == "" {
-			ipv4 = ip.String()
-		} else if ip.Is6() && ipv6 == "" {
-			ipv6 = ip.String()
+		if ip.Is4() && state.ipv4 == "" {
+			state.ipv4 = ip.String()
+		} else if ip.Is6() && state.ipv6 == "" {
+			state.ipv6 = ip.String()
 		}
 	}
 
-	var content string
-	if ipv4 != "" {
-		content += fmt.Sprintf("TS_IPV4=%s\n", ipv4)
-	}
-	if ipv6 != "" {
-		content += fmt.Sprintf("TS_IPV6=%s\n", ipv6)
-	}
-
-	if content == "" {
-		slog.Debug("No IP addresses to write to env file")
-		return nil
-	}
-
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	slog.Debug("Wrote env file", "path", path, "ipv4", ipv4, "ipv6", ipv6)
-	return nil
+	return state, nil
 }
 
-func deleteEnvFile(path string) {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		slog.Error("Failed to delete env file", "path", path, "error", err)
-	} else if err == nil {
-		slog.Debug("Deleted env file", "path", path)
+func syncEnvFile(path string, state tailscaleState) {
+	if path == "" {
+		return
+	}
+
+	var content string
+	if state.ipv4 != "" {
+		content += fmt.Sprintf("TS_IPV4=%s\n", state.ipv4)
+	}
+	if state.ipv6 != "" {
+		content += fmt.Sprintf("TS_IPV6=%s\n", state.ipv6)
+	}
+
+	if content != "" {
+		dir := filepath.Dir(path)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			slog.Error("Failed to create directory", "path", path, "error", err)
+			return
+		}
+
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			slog.Error("Failed to write env file", "path", path, "error", err)
+			return
+		}
+
+		slog.Debug("Wrote env file", "path", path, "ipv4", state.ipv4, "ipv6", state.ipv6)
+	} else {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			slog.Error("Failed to delete env file", "path", path, "error", err)
+		} else if err == nil {
+			slog.Debug("Deleted env file", "path", path)
+		}
 	}
 }
 

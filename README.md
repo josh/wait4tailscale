@@ -32,10 +32,14 @@ Will automatically detect the default socket location, but otherwise a socket ca
 $ wait4tailscale --socket /var/run/tailscale/tailscaled.sock
 ```
 
-Another feature is syncing a systemd target to the current online state. This functions alot of like the built in `network-online.target`.
+### systemd Integration
 
-```
-$ wait4tailscale --systemd-target=tailscale-online.target
+The package includes systemd units that provide a `tailscale-online.target` similar to `network-online.target`. Other services can depend on this target to wait for Tailscale connectivity:
+
+```ini
+[Unit]
+After=tailscale-online.target
+Wants=tailscale-online.target
 ```
 
 ### Nix
@@ -44,5 +48,4 @@ Packaged under [josh/nurpkgs](https://github.com/josh/nurpkgs) flake. Use the sy
 
 ```nix
 systemd.packages = [ pkgs.nur.repos.josh.wait4tailscale ];
-systemd.services.tailscale-online.wantedBy = [ "multi-user.target" ];
 ```

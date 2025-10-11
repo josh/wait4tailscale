@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -17,8 +16,7 @@ import (
 )
 
 var (
-	Version        = "1.1.2"
-	SystemdProgram = "systemctl"
+	Version = "1.1.2"
 )
 
 type tailscaleState struct {
@@ -28,16 +26,15 @@ type tailscaleState struct {
 }
 
 var (
-	socket        string
-	help          bool
-	verbose       bool
-	version       bool
-	online        bool
-	offline       bool
-	watch         bool
-	systemdTarget string
-	envFile       string
-	interval      time.Duration
+	socket   string
+	help     bool
+	verbose  bool
+	version  bool
+	online   bool
+	offline  bool
+	watch    bool
+	envFile  string
+	interval time.Duration
 )
 
 func main() {
@@ -48,7 +45,6 @@ func main() {
 	flag.BoolVar(&online, "online", false, "Wait for Tailscale to be online")
 	flag.BoolVar(&offline, "offline", false, "Wait for Tailscale to be offline")
 	flag.BoolVar(&watch, "watch", false, "Watch for Tailscale state changes")
-	flag.StringVar(&systemdTarget, "systemd-target", "", "Sync systemd target to Tailscale state")
 	flag.StringVar(&envFile, "env-file", "", "Path to write environment file with Tailscale IPs")
 	flag.DurationVar(&interval, "interval", 2*time.Second, "Interval between status checks (e.g., 2s, 500ms)")
 	flag.Parse()
@@ -75,18 +71,15 @@ func main() {
 	if watch {
 		actionCount++
 	}
-	if systemdTarget != "" {
-		actionCount++
-	}
 
 	if actionCount == 0 {
-		fmt.Fprintf(os.Stderr, "Error: Must specify exactly one action: --online, --offline, --watch, or --systemd\n")
+		fmt.Fprintf(os.Stderr, "Error: Must specify exactly one action: --online, --offline, or --watch\n")
 		showUsage()
 		os.Exit(1)
 	}
 
 	if actionCount > 1 {
-		fmt.Fprintf(os.Stderr, "Error: Cannot specify multiple actions. Use only one of --online, --offline, --watch, or --systemd\n")
+		fmt.Fprintf(os.Stderr, "Error: Cannot specify multiple actions. Use only one of --online, --offline, or --watch\n")
 		showUsage()
 		os.Exit(1)
 	}
@@ -149,20 +142,6 @@ func main() {
 				}
 			}
 		}
-	} else if systemdTarget != "" {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case state := <-stateChan:
-				syncEnvFile(envFile, state)
-				if state.online {
-					_ = execCommand(ctx, SystemdProgram, "start", systemdTarget)
-				} else {
-					_ = execCommand(ctx, SystemdProgram, "stop", systemdTarget)
-				}
-			}
-		}
 	}
 }
 
@@ -182,7 +161,7 @@ func setupLogging(verbose bool) {
 }
 
 func showUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch|--systemd-target=NAME [--socket=PATH] [--env-file=PATH] [--verbose] [--version] [--interval=DURATION]\n")
+	fmt.Fprintf(os.Stderr, "Usage: wait4tailscale --online|--offline|--watch [--socket=PATH] [--env-file=PATH] [--verbose] [--version] [--interval=DURATION]\n")
 }
 
 func watchStateChanges(ctx context.Context, client *local.Client, stateChan chan<- tailscaleState) {
@@ -360,20 +339,4 @@ func syncEnvFile(path string, state tailscaleState) {
 			slog.Debug("Deleted env file", "path", path)
 		}
 	}
-}
-
-func execCommand(ctx context.Context, cmd string, args ...string) error {
-	start := time.Now()
-	command := exec.CommandContext(ctx, cmd, args...)
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-
-	err := command.Run()
-	duration := time.Since(start)
-	if err != nil {
-		slog.Error("exec", "cmd", cmd, "args", args, "duration", duration, "error", err)
-	} else {
-		slog.Debug("exec", "cmd", cmd, "args", args, "duration", duration)
-	}
-	return err
 }

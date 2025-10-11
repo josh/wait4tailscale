@@ -1,0 +1,11 @@
+[Unit]
+Description=Wait for Tailscale to be Online
+Documentation=https://github.com/josh/wait4tailscale
+Wants=tailscale.service
+After=tailscale.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/wait4tailscale -online -env-file=%t/tailscale/ip.env
+ExecStop=/usr/bin/rm -f %t/tailscale/ip.env

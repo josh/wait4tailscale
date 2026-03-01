@@ -2,7 +2,7 @@ module github.com/josh/wait4tailscale
 
 go 1.25.5
 
-require tailscale.com v1.94.1
+require tailscale.com v1.94.2
 
 require (
 	filippo.io/edwards25519 v1.1.1 // indirect

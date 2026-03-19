@@ -1,5 +1,23 @@
 # wait4tailscale
 
+> **Deprecated:** This project's functionality has been upstreamed into Tailscale itself. Since Tailscale v1.82, you can use the built-in [`tailscale wait`](https://github.com/tailscale/tailscale/pull/18574) command and [`tailscale-online.target`](https://github.com/tailscale/tailscale/pull/18577) systemd target instead.
+>
+> ```
+> $ tailscale wait && /path/to/your/service
+> ```
+>
+> For systemd services:
+>
+> ```ini
+> [Unit]
+> After=tailscale-online.target
+> Requires=tailscale-online.target
+> ```
+>
+> The `tailscale wait` command also supports a `--timeout` flag and there is a new `tailscale ip --assert=<ip>` option for verifying a specific IP assignment.
+
+---
+
 Basically a rich man's version of this poor man's bash script:
 
 ```bash

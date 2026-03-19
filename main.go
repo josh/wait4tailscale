@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	Version = "1.1.4"
+	Version = "1.2.0"
 )
 
 type tailscaleState struct {
